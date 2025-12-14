@@ -155,6 +155,7 @@
             Notifications sent: <span id="notificationCount">0</span>
         </div>
         <div id="nextNotification" class="next-notification"></div>
+        <div id="debugInfo" class="next-notification" style="font-size: 12px; color: #999; margin-top: 5px;"></div>
         
         <button id="refreshBtn" onclick="location.reload()" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-top: 10px;">
             Refresh Page
@@ -175,6 +176,7 @@
         const disableBtn = document.getElementById('disableBtn');
         const nextNotificationEl = document.getElementById('nextNotification');
         const notificationCountEl = document.getElementById('notificationCount');
+        const debugInfoEl = document.getElementById('debugInfo');
         const refreshBtn = document.getElementById('refreshBtn');
 
         // Update UI based on permission status
@@ -265,19 +267,69 @@
 
         // Send a notification
         function sendNotification() {
-            if (Notification.permission === 'granted') {
-                try {
-                    new Notification('I Love You 💕', {
-                        body: 'I love you! 💖',
-                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
-                        tag: 'iloveyou'
-                    });
-                    // Increment counter
-                    notificationCount++;
-                    notificationCountEl.textContent = notificationCount;
-                } catch (e) {
-                    console.error('Notification error:', e);
+            // Always increment counter first (so it shows even if notification fails)
+            notificationCount++;
+            if (notificationCountEl) {
+                notificationCountEl.textContent = notificationCount;
+            }
+            
+            // Check permission
+            const permission = Notification.permission;
+            if (permission !== 'granted') {
+                debugInfoEl.textContent = `Permission: ${permission}`;
+                console.log('Permission not granted:', permission);
+                return;
+            }
+
+            // Try to send notification
+            try {
+                // Check if Notification constructor is available
+                if (typeof Notification === 'undefined') {
+                    debugInfoEl.textContent = 'Notifications not supported';
+                    return;
                 }
+
+                const notification = new Notification('I Love You 💕', {
+                    body: 'I love you! 💖',
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
+                    tag: 'iloveyou',
+                    requireInteraction: false,
+                    silent: false
+                });
+
+                // Handle notification events
+                notification.onerror = (e) => {
+                    console.error('Notification error:', e);
+                    debugInfoEl.textContent = 'Notification error occurred';
+                };
+
+                notification.onshow = () => {
+                    console.log('Notification shown');
+                    debugInfoEl.textContent = 'Notification sent successfully';
+                    setTimeout(() => {
+                        if (debugInfoEl.textContent === 'Notification sent successfully') {
+                            debugInfoEl.textContent = '';
+                        }
+                    }, 2000);
+                };
+
+                notification.onclose = () => {
+                    console.log('Notification closed');
+                };
+
+                // Auto close after 3 seconds
+                setTimeout(() => {
+                    try {
+                        notification.close();
+                    } catch (e) {
+                        // Ignore close errors
+                    }
+                }, 3000);
+
+            } catch (e) {
+                console.error('Failed to create notification:', e);
+                debugInfoEl.textContent = `Error: ${e.message || 'Unknown error'}`;
+                // Counter already incremented, so user can see attempts
             }
         }
 
@@ -304,8 +356,16 @@
                 clearInterval(countdownInterval);
             }
 
+            // Verify permission before starting
+            if (Notification.permission !== 'granted') {
+                console.log('Cannot start: Permission not granted');
+                return;
+            }
+
             // Send first notification immediately
-            sendNotification();
+            setTimeout(() => {
+                sendNotification();
+            }, 100);
 
             // Start countdown from 5 seconds
             let countdown = 5;
@@ -324,8 +384,14 @@
 
             // Set interval for notifications every 5 seconds (5000 ms)
             notificationInterval = setInterval(() => {
-                sendNotification();
-                countdown = 5; // Reset countdown after sending
+                // Double check permission before sending
+                if (Notification.permission === 'granted') {
+                    sendNotification();
+                    countdown = 5; // Reset countdown after sending
+                } else {
+                    console.log('Permission lost, stopping notifications');
+                    disableNotifications();
+                }
             }, 5000);
         }
 
