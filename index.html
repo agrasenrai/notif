@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Get hourly 'I love you' notifications">
+    <meta name="theme-color" content="#ff6b9d">
+    <title>I Love You Notifications</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            color: #ff6b9d;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .heart {
+            font-size: 50px;
+            color: #ff6b9d;
+            margin: 20px 0;
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 157, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .info strong {
+            color: #ff6b9d;
+        }
+
+        .next-notification {
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>I Love You 💕</h1>
+        <div class="heart">💖</div>
+        
+        <div id="status" class="status inactive">
+            Notifications are OFF
+        </div>
+
+        <button id="enableBtn" onclick="requestPermission()">
+            Enable Notifications
+        </button>
+
+        <button id="disableBtn" onclick="disableNotifications()" style="display: none;">
+            Disable Notifications
+        </button>
+
+        <div class="info">
+            <strong>How it works:</strong><br>
+            1. Click "Enable Notifications"<br>
+            2. Allow notifications when prompted<br>
+            3. You'll receive "I love you" every hour! 💕<br><br>
+            <strong>Tip:</strong> Keep this page open or add to home screen for best results.
+        </div>
+
+        <div id="nextNotification" class="next-notification"></div>
+    </div>
+
+    <script>
+        let notificationInterval = null;
+        let nextNotificationTime = null;
+
+        // Check if notifications are supported
+        if (!('Notification' in window)) {
+            alert('This browser does not support notifications.');
+        }
+
+        // Check current permission status
+        function checkPermission() {
+            if (Notification.permission === 'granted') {
+                startNotifications();
+            } else if (Notification.permission === 'denied') {
+                document.getElementById('status').textContent = 'Notifications are blocked. Please enable in browser settings.';
+                document.getElementById('status').className = 'status inactive';
+            }
+        }
+
+        // Request notification permission
+        function requestPermission() {
+            if (Notification.permission === 'granted') {
+                startNotifications();
+                return;
+            }
+
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    startNotifications();
+                } else {
+                    document.getElementById('status').textContent = 'Permission denied. Please enable notifications in browser settings.';
+                    document.getElementById('status').className = 'status inactive';
+                }
+            });
+        }
+
+        // Start sending notifications
+        function startNotifications() {
+            if (notificationInterval) {
+                clearInterval(notificationInterval);
+            }
+
+            // Send immediate notification
+            sendNotification();
+
+            // Set interval for hourly notifications (3600000 ms = 1 hour)
+            notificationInterval = setInterval(() => {
+                sendNotification();
+            }, 3600000);
+
+            // Update UI
+            document.getElementById('status').textContent = 'Notifications are ON ✅';
+            document.getElementById('status').className = 'status active';
+            document.getElementById('enableBtn').style.display = 'none';
+            document.getElementById('disableBtn').style.display = 'inline-block';
+
+            // Calculate next notification time
+            updateNextNotificationTime();
+        }
+
+        // Send a notification
+        function sendNotification() {
+            if (Notification.permission === 'granted') {
+                const notification = new Notification('I Love You 💕', {
+                    body: 'I love you! 💖',
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
+                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💕</text></svg>',
+                    tag: 'iloveyou-notification',
+                    requireInteraction: false
+                });
+
+                // Auto close after 5 seconds
+                setTimeout(() => {
+                    notification.close();
+                }, 5000);
+
+                // Update next notification time
+                updateNextNotificationTime();
+            }
+        }
+
+        // Update next notification time display
+        function updateNextNotificationTime() {
+            const now = new Date();
+            const next = new Date(now.getTime() + 3600000);
+            const timeString = next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('nextNotification').textContent = `Next notification at: ${timeString}`;
+        }
+
+        // Disable notifications
+        function disableNotifications() {
+            if (notificationInterval) {
+                clearInterval(notificationInterval);
+                notificationInterval = null;
+            }
+
+            document.getElementById('status').textContent = 'Notifications are OFF';
+            document.getElementById('status').className = 'status inactive';
+            document.getElementById('enableBtn').style.display = 'inline-block';
+            document.getElementById('disableBtn').style.display = 'none';
+            document.getElementById('nextNotification').textContent = '';
+        }
+
+        // Check permission on page load
+        window.addEventListener('load', () => {
+            checkPermission();
+        });
+
+        // Handle page visibility - restart notifications when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && Notification.permission === 'granted' && !notificationInterval) {
+                startNotifications();
+            }
+        });
+
+        // Service Worker registration for PWA (optional, for better background support)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Service worker would need to be in a separate file
+                // For now, we'll rely on the page staying open or being in background
+            });
+        }
+    </script>
+</body>
+</html>
