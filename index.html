@@ -147,10 +147,13 @@
             <strong>How it works:</strong><br>
             1. Click "Enable Notifications"<br>
             2. Allow notifications when prompted<br>
-            3. You'll receive "I love you" every hour! 💕<br><br>
+            3. You'll receive "I love you" every 5 seconds! 💕<br><br>
             <strong>Tip:</strong> Keep this page open or add to home screen for best results.
         </div>
 
+        <div id="counter" class="next-notification" style="font-size: 16px; font-weight: 600; color: #ff6b9d; margin-top: 15px;">
+            Notifications sent: <span id="notificationCount">0</span>
+        </div>
         <div id="nextNotification" class="next-notification"></div>
         
         <button id="refreshBtn" onclick="location.reload()" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-top: 10px;">
@@ -161,14 +164,17 @@
     <script>
         // Simple, reliable approach for mobile
         let notificationInterval = null;
+        let countdownInterval = null;
         let checkInterval = null;
         let manuallyDisabled = false; // Track if user manually disabled
+        let notificationCount = 0; // Counter for notifications sent
 
         // Get DOM elements
         const statusEl = document.getElementById('status');
         const enableBtn = document.getElementById('enableBtn');
         const disableBtn = document.getElementById('disableBtn');
         const nextNotificationEl = document.getElementById('nextNotification');
+        const notificationCountEl = document.getElementById('notificationCount');
         const refreshBtn = document.getElementById('refreshBtn');
 
         // Update UI based on permission status
@@ -257,14 +263,8 @@
             }
         }
 
-        // Start notifications
-        function startNotifications() {
-            // Clear existing interval
-            if (notificationInterval) {
-                clearInterval(notificationInterval);
-            }
-
-            // Send first notification immediately
+        // Send a notification
+        function sendNotification() {
             if (Notification.permission === 'granted') {
                 try {
                     new Notification('I Love You 💕', {
@@ -272,29 +272,61 @@
                         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
                         tag: 'iloveyou'
                     });
+                    // Increment counter
+                    notificationCount++;
+                    notificationCountEl.textContent = notificationCount;
                 } catch (e) {
                     console.error('Notification error:', e);
                 }
             }
+        }
 
-            // Set hourly interval (3600000 ms = 1 hour)
-            notificationInterval = setInterval(() => {
-                if (Notification.permission === 'granted') {
-                    try {
-                        new Notification('I Love You 💕', {
-                            body: 'I love you! 💖',
-                            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
-                            tag: 'iloveyou'
-                        });
-                    } catch (e) {
-                        console.error('Notification error:', e);
-                    }
+        // Update countdown display
+        function updateCountdown(seconds) {
+            if (seconds > 0) {
+                nextNotificationEl.textContent = `Next notification in: ${seconds} seconds`;
+            } else {
+                nextNotificationEl.textContent = 'Sending notification...';
+            }
+        }
+
+        // Start notifications
+        function startNotifications() {
+            // Reset counter
+            notificationCount = 0;
+            notificationCountEl.textContent = notificationCount;
+
+            // Clear existing intervals
+            if (notificationInterval) {
+                clearInterval(notificationInterval);
+            }
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+
+            // Send first notification immediately
+            sendNotification();
+
+            // Start countdown from 5 seconds
+            let countdown = 5;
+            updateCountdown(countdown);
+
+            // Update countdown every second
+            countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    updateCountdown(countdown);
+                } else {
+                    countdown = 5; // Reset to 5 seconds
+                    updateCountdown(countdown);
                 }
-            }, 3600000);
+            }, 1000);
 
-            // Update next notification time
-            const next = new Date(Date.now() + 3600000);
-            nextNotificationEl.textContent = `Next notification at: ${next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            // Set interval for notifications every 5 seconds (5000 ms)
+            notificationInterval = setInterval(() => {
+                sendNotification();
+                countdown = 5; // Reset countdown after sending
+            }, 5000);
         }
 
         // Disable notifications
@@ -306,6 +338,12 @@
             if (notificationInterval) {
                 clearInterval(notificationInterval);
                 notificationInterval = null;
+            }
+            
+            // Stop countdown
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
             }
             
             // Update UI
