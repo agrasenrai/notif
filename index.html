@@ -95,13 +95,14 @@
         }
 
         button:active {
-            transform: translateY(0);
+            transform: scale(0.98);
         }
 
         button:disabled {
             background: #ccc;
             cursor: not-allowed;
             box-shadow: none;
+            opacity: 0.6;
         }
 
         .info {
@@ -202,22 +203,46 @@
 
         // Request permission - simple approach
         function requestPermission() {
+            // Prevent multiple clicks
+            if (enableBtn.disabled) {
+                return;
+            }
+
             if (Notification.permission === 'granted') {
                 updateUI();
                 return;
             }
 
+            // Update UI immediately
             statusEl.textContent = 'Requesting permission...';
+            statusEl.className = 'status inactive';
             enableBtn.disabled = true;
+            enableBtn.style.opacity = '0.6';
 
-            Notification.requestPermission().then(permission => {
+            // Request permission
+            const permissionPromise = Notification.requestPermission();
+            
+            if (permissionPromise && typeof permissionPromise.then === 'function') {
+                permissionPromise.then(permission => {
+                    enableBtn.disabled = false;
+                    enableBtn.style.opacity = '1';
+                    updateUI();
+                    // Force another check after a delay
+                    setTimeout(updateUI, 300);
+                }).catch(() => {
+                    enableBtn.disabled = false;
+                    enableBtn.style.opacity = '1';
+                    // Check actual status even if error
+                    setTimeout(() => {
+                        updateUI();
+                    }, 500);
+                });
+            } else {
+                // Fallback for older browsers
                 enableBtn.disabled = false;
-                updateUI();
-            }).catch(() => {
-                enableBtn.disabled = false;
-                // Check actual status even if error
+                enableBtn.style.opacity = '1';
                 setTimeout(updateUI, 500);
-            });
+            }
         }
 
         // Start notifications
@@ -287,22 +312,67 @@
             }
         }
 
-        // Button event listeners - simple and direct
-        enableBtn.addEventListener('click', requestPermission);
-        enableBtn.addEventListener('touchend', (e) => {
+        // Button event handler - handles both click and touch
+        function handleEnableClick(e) {
             e.preventDefault();
-            requestPermission();
-        });
-        
-        disableBtn.addEventListener('click', disableNotifications);
-        disableBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            disableNotifications();
-        });
+            e.stopPropagation();
+            if (!enableBtn.disabled) {
+                requestPermission();
+            }
+            return false;
+        }
 
-        // Initial setup
-        updateUI();
-        startChecking();
+        function handleDisableClick(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            disableNotifications();
+            return false;
+        }
+
+        // Setup button listeners - wait for DOM to be ready
+        function setupButtons() {
+            // Enable button - multiple event types for maximum compatibility
+            enableBtn.onclick = handleEnableClick;
+            enableBtn.addEventListener('click', handleEnableClick, true);
+            enableBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!enableBtn.disabled) {
+                    requestPermission();
+                }
+            }, { passive: false });
+            enableBtn.addEventListener('touchstart', (e) => {
+                // Prevent double-firing
+            }, { passive: true });
+            
+            // Disable button
+            disableBtn.onclick = handleDisableClick;
+            disableBtn.addEventListener('click', handleDisableClick, true);
+            disableBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                disableNotifications();
+            }, { passive: false });
+        }
+
+        // Setup buttons when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setupButtons();
+                updateUI();
+                startChecking();
+            });
+        } else {
+            setupButtons();
+            updateUI();
+            startChecking();
+        }
+
+        // Also setup on window load as backup
+        window.addEventListener('load', () => {
+            setupButtons();
+            updateUI();
+        });
 
         // Re-check when page becomes visible (user returns from permission dialog)
         document.addEventListener('visibilitychange', () => {
