@@ -169,6 +169,7 @@
         let checkInterval = null;
         let manuallyDisabled = false; // Track if user manually disabled
         let notificationCount = 0; // Counter for notifications sent
+        let serviceWorkerRegistration = null; // Service worker registration
 
         // Get DOM elements
         const statusEl = document.getElementById('status');
@@ -178,6 +179,33 @@
         const notificationCountEl = document.getElementById('notificationCount');
         const debugInfoEl = document.getElementById('debugInfo');
         const refreshBtn = document.getElementById('refreshBtn');
+
+        // Register service worker for mobile notifications
+        async function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    // Try root path first (for Netlify)
+                    let registration = null;
+                    try {
+                        registration = await navigator.serviceWorker.register('./sw.js');
+                    } catch (e) {
+                        // Try absolute path
+                        registration = await navigator.serviceWorker.register('/sw.js');
+                    }
+                    serviceWorkerRegistration = registration;
+                    console.log('Service Worker registered');
+                    return registration;
+                } catch (error) {
+                    console.error('Service Worker registration failed:', error);
+                    if (debugInfoEl) {
+                        debugInfoEl.textContent = 'Service Worker not available, using fallback';
+                    }
+                    // Try to use regular Notification API as fallback
+                    return null;
+                }
+            }
+            return null;
+        }
 
         // Update UI based on permission status
         function updateUI() {
@@ -266,7 +294,7 @@
         }
 
         // Send a notification
-        function sendNotification() {
+        async function sendNotification() {
             // Always increment counter first (so it shows even if notification fails)
             notificationCount++;
             if (notificationCountEl) {
@@ -276,16 +304,42 @@
             // Check permission
             const permission = Notification.permission;
             if (permission !== 'granted') {
-                debugInfoEl.textContent = `Permission: ${permission}`;
+                if (debugInfoEl) debugInfoEl.textContent = `Permission: ${permission}`;
                 console.log('Permission not granted:', permission);
                 return;
             }
 
-            // Try to send notification
+            // Try to send notification using service worker first (for mobile)
+            if (serviceWorkerRegistration && serviceWorkerRegistration.active) {
+                try {
+                    await serviceWorkerRegistration.showNotification('I Love You 💕', {
+                        body: 'I love you! 💖',
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
+                        tag: 'iloveyou',
+                        requireInteraction: false,
+                        silent: false,
+                        badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💕</text></svg>'
+                    });
+                    if (debugInfoEl) {
+                        debugInfoEl.textContent = 'Notification sent (Service Worker)';
+                        setTimeout(() => {
+                            if (debugInfoEl && debugInfoEl.textContent === 'Notification sent (Service Worker)') {
+                                debugInfoEl.textContent = '';
+                            }
+                        }, 2000);
+                    }
+                    return;
+                } catch (e) {
+                    console.error('Service Worker notification failed:', e);
+                    // Fall through to try regular Notification API
+                }
+            }
+
+            // Fallback to regular Notification API (for desktop)
             try {
                 // Check if Notification constructor is available
                 if (typeof Notification === 'undefined') {
-                    debugInfoEl.textContent = 'Notifications not supported';
+                    if (debugInfoEl) debugInfoEl.textContent = 'Notifications not supported';
                     return;
                 }
 
@@ -300,17 +354,19 @@
                 // Handle notification events
                 notification.onerror = (e) => {
                     console.error('Notification error:', e);
-                    debugInfoEl.textContent = 'Notification error occurred';
+                    if (debugInfoEl) debugInfoEl.textContent = 'Notification error occurred';
                 };
 
                 notification.onshow = () => {
                     console.log('Notification shown');
-                    debugInfoEl.textContent = 'Notification sent successfully';
-                    setTimeout(() => {
-                        if (debugInfoEl.textContent === 'Notification sent successfully') {
-                            debugInfoEl.textContent = '';
-                        }
-                    }, 2000);
+                    if (debugInfoEl) {
+                        debugInfoEl.textContent = 'Notification sent successfully';
+                        setTimeout(() => {
+                            if (debugInfoEl && debugInfoEl.textContent === 'Notification sent successfully') {
+                                debugInfoEl.textContent = '';
+                            }
+                        }, 2000);
+                    }
                 };
 
                 notification.onclose = () => {
@@ -328,7 +384,7 @@
 
             } catch (e) {
                 console.error('Failed to create notification:', e);
-                debugInfoEl.textContent = `Error: ${e.message || 'Unknown error'}`;
+                if (debugInfoEl) debugInfoEl.textContent = `Error: ${e.message || 'Unknown error'}`;
                 // Counter already incremented, so user can see attempts
             }
         }
@@ -343,10 +399,17 @@
         }
 
         // Start notifications
-        function startNotifications() {
+        async function startNotifications() {
+            // Register service worker first (for mobile support)
+            if (!serviceWorkerRegistration && 'serviceWorker' in navigator) {
+                await registerServiceWorker();
+            }
+
             // Reset counter
             notificationCount = 0;
-            notificationCountEl.textContent = notificationCount;
+            if (notificationCountEl) {
+                notificationCountEl.textContent = notificationCount;
+            }
 
             // Clear existing intervals
             if (notificationInterval) {
