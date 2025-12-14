@@ -82,6 +82,11 @@
             box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
             transition: transform 0.2s, box-shadow 0.2s;
             font-weight: 600;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            min-height: 48px;
+            width: 100%;
+            max-width: 300px;
         }
 
         button:hover {
@@ -129,11 +134,11 @@
             Notifications are OFF
         </div>
 
-        <button id="enableBtn" onclick="requestPermission()">
+        <button id="enableBtn">
             Enable Notifications
         </button>
 
-        <button id="disableBtn" onclick="disableNotifications()" style="display: none;">
+        <button id="disableBtn" style="display: none;">
             Disable Notifications
         </button>
 
@@ -174,13 +179,26 @@
                 return;
             }
 
+            // Update status while requesting
+            document.getElementById('status').textContent = 'Requesting permission...';
+            document.getElementById('status').className = 'status inactive';
+
             Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    startNotifications();
-                } else {
-                    document.getElementById('status').textContent = 'Permission denied. Please enable notifications in browser settings.';
-                    document.getElementById('status').className = 'status inactive';
-                }
+                // Force UI update on mobile
+                setTimeout(() => {
+                    if (permission === 'granted') {
+                        startNotifications();
+                        // Force a re-check to ensure UI updates
+                        checkPermission();
+                    } else {
+                        document.getElementById('status').textContent = 'Permission denied. Please enable notifications in browser settings.';
+                        document.getElementById('status').className = 'status inactive';
+                    }
+                }, 100);
+            }).catch(err => {
+                console.error('Error requesting permission:', err);
+                document.getElementById('status').textContent = 'Error requesting permission. Please try again.';
+                document.getElementById('status').className = 'status inactive';
             });
         }
 
@@ -256,12 +274,70 @@
             checkPermission();
         });
 
+        // Also check when DOM is ready (for faster mobile response)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkPermission);
+        } else {
+            checkPermission();
+        }
+
         // Handle page visibility - restart notifications when page becomes visible
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && Notification.permission === 'granted' && !notificationInterval) {
-                startNotifications();
+            if (!document.hidden) {
+                // Re-check permission when page becomes visible (mobile fix)
+                checkPermission();
+                if (Notification.permission === 'granted' && !notificationInterval) {
+                    startNotifications();
+                }
             }
         });
+
+        // Handle page focus - check permission when user returns to page (mobile fix)
+        window.addEventListener('focus', () => {
+            setTimeout(() => {
+                checkPermission();
+            }, 200);
+        });
+
+        // Setup event listeners for buttons (better mobile support)
+        function setupEventListeners() {
+            const enableBtn = document.getElementById('enableBtn');
+            const disableBtn = document.getElementById('disableBtn');
+
+            if (enableBtn) {
+                enableBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    requestPermission();
+                    return false;
+                });
+                // Also add touch event for better mobile response
+                enableBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    requestPermission();
+                    return false;
+                });
+            }
+
+            if (disableBtn) {
+                disableBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    disableNotifications();
+                    return false;
+                });
+                disableBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    disableNotifications();
+                    return false;
+                });
+            }
+        }
+
+        // Setup listeners when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupEventListeners);
+        } else {
+            setupEventListeners();
+        }
 
         // Service Worker registration for PWA (optional, for better background support)
         if ('serviceWorker' in navigator) {
