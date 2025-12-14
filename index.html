@@ -158,206 +158,106 @@
     </div>
 
     <script>
+        // Simple, reliable approach for mobile
         let notificationInterval = null;
-        let nextNotificationTime = null;
+        let checkInterval = null;
 
-        // Check if notifications are supported
-        if (!('Notification' in window)) {
-            alert('This browser does not support notifications.');
-        }
+        // Get DOM elements
+        const statusEl = document.getElementById('status');
+        const enableBtn = document.getElementById('enableBtn');
+        const disableBtn = document.getElementById('disableBtn');
+        const nextNotificationEl = document.getElementById('nextNotification');
+        const refreshBtn = document.getElementById('refreshBtn');
 
-        // Check current permission status
-        function checkPermission() {
+        // Update UI based on permission status
+        function updateUI() {
             const permission = Notification.permission;
+            
             if (permission === 'granted') {
-                // Permission is granted - start notifications and update UI
-                startNotifications();
-            } else if (permission === 'denied') {
-                document.getElementById('status').textContent = 'Notifications are blocked. Please enable in browser settings.';
-                document.getElementById('status').className = 'status inactive';
-                document.getElementById('enableBtn').style.display = 'inline-block';
-                document.getElementById('disableBtn').style.display = 'none';
-                document.getElementById('enableBtn').disabled = false;
-            } else {
-                // Default state - permission not yet requested
-                document.getElementById('status').textContent = 'Notifications are OFF';
-                document.getElementById('status').className = 'status inactive';
-                document.getElementById('enableBtn').style.display = 'inline-block';
-                document.getElementById('disableBtn').style.display = 'none';
-                document.getElementById('enableBtn').disabled = false;
-            }
-        }
-
-        // Continuous permission monitoring for mobile (runs every 2 seconds)
-        let permissionMonitor = null;
-        function startPermissionMonitoring() {
-            if (permissionMonitor) return;
-            
-            permissionMonitor = setInterval(() => {
-                const currentPermission = Notification.permission;
-                if (currentPermission === 'granted') {
-                    // If permission is granted but UI shows it's off, update UI
-                    const statusEl = document.getElementById('status');
-                    if (statusEl && !statusEl.textContent.includes('ON')) {
-                        startNotifications();
-                    }
-                }
-            }, 2000);
-        }
-
-        // Stop monitoring when page is hidden
-        function stopPermissionMonitoring() {
-            if (permissionMonitor) {
-                clearInterval(permissionMonitor);
-                permissionMonitor = null;
-            }
-        }
-
-        // Request notification permission
-        function requestPermission() {
-            // First, check current permission status
-            const currentPermission = Notification.permission;
-            
-            if (currentPermission === 'granted') {
-                // Permission already granted - just start notifications
-                startNotifications();
-                return;
-            }
-
-            if (currentPermission === 'denied') {
-                // Permission denied - show message
-                document.getElementById('status').textContent = 'Notifications are blocked. Please enable in browser settings and refresh.';
-                document.getElementById('status').className = 'status inactive';
-                document.getElementById('refreshBtn').style.display = 'inline-block';
-                return;
-            }
-
-            // Permission is 'default' - request it
-            // Update status while requesting
-            document.getElementById('status').textContent = 'Requesting permission...';
-            document.getElementById('status').className = 'status inactive';
-            document.getElementById('enableBtn').disabled = true;
-
-            // Try to request permission
-            try {
-                const permissionPromise = Notification.requestPermission();
+                // Permission granted - show active state
+                statusEl.textContent = 'Notifications are ON ✅';
+                statusEl.className = 'status active';
+                enableBtn.style.display = 'none';
+                disableBtn.style.display = 'inline-block';
                 
-                if (permissionPromise && typeof permissionPromise.then === 'function') {
-                    // Modern Promise-based API
-                    permissionPromise.then(permission => {
-                        handlePermissionResult(permission);
-                    }).catch(err => {
-                        console.error('Error requesting permission:', err);
-                        // Even if there's an error, check the actual permission status
-                        setTimeout(() => {
-                            const actualPermission = Notification.permission;
-                            if (actualPermission === 'granted') {
-                                startNotifications();
-                            } else {
-                                document.getElementById('status').textContent = 'Please refresh the page if you granted permission.';
-                                document.getElementById('status').className = 'status inactive';
-                                document.getElementById('enableBtn').disabled = false;
-                                document.getElementById('refreshBtn').style.display = 'inline-block';
-                            }
-                        }, 500);
-                    });
-                } else {
-                    // Fallback for older browsers (callback-based)
-                    Notification.requestPermission(function(permission) {
-                        handlePermissionResult(permission);
-                    });
+                // Start notifications if not already started
+                if (!notificationInterval) {
+                    startNotifications();
                 }
-            } catch (err) {
-                console.error('Exception requesting permission:', err);
-                // Check actual permission status even after error
-                setTimeout(() => {
-                    const actualPermission = Notification.permission;
-                    if (actualPermission === 'granted') {
-                        startNotifications();
-                    } else {
-                        document.getElementById('status').textContent = 'Please refresh the page if you granted permission.';
-                        document.getElementById('status').className = 'status inactive';
-                        document.getElementById('enableBtn').disabled = false;
-                        document.getElementById('refreshBtn').style.display = 'inline-block';
-                    }
-                }, 500);
-            }
-        }
-
-        // Handle permission result
-        function handlePermissionResult(permission) {
-            document.getElementById('enableBtn').disabled = false;
-            
-            if (permission === 'granted') {
-                startNotifications();
-                // Multiple attempts to ensure UI updates on mobile
-                setTimeout(() => checkPermission(), 100);
-                setTimeout(() => checkPermission(), 300);
-                setTimeout(() => checkPermission(), 600);
             } else if (permission === 'denied') {
-                document.getElementById('status').textContent = 'Permission denied. Please enable in browser settings and refresh.';
-                document.getElementById('status').className = 'status inactive';
-                document.getElementById('refreshBtn').style.display = 'inline-block';
+                // Permission denied
+                statusEl.textContent = 'Notifications are blocked. Enable in browser settings and refresh.';
+                statusEl.className = 'status inactive';
+                enableBtn.style.display = 'inline-block';
+                disableBtn.style.display = 'none';
+                refreshBtn.style.display = 'inline-block';
             } else {
-                // Permission is still 'default' - user dismissed
-                document.getElementById('status').textContent = 'Please allow notifications when prompted, or refresh if you already allowed.';
-                document.getElementById('status').className = 'status inactive';
-                document.getElementById('refreshBtn').style.display = 'inline-block';
+                // Default - not requested yet
+                statusEl.textContent = 'Notifications are OFF';
+                statusEl.className = 'status inactive';
+                enableBtn.style.display = 'inline-block';
+                disableBtn.style.display = 'none';
             }
         }
 
+        // Request permission - simple approach
+        function requestPermission() {
+            if (Notification.permission === 'granted') {
+                updateUI();
+                return;
+            }
 
-        // Start sending notifications
+            statusEl.textContent = 'Requesting permission...';
+            enableBtn.disabled = true;
+
+            Notification.requestPermission().then(permission => {
+                enableBtn.disabled = false;
+                updateUI();
+            }).catch(() => {
+                enableBtn.disabled = false;
+                // Check actual status even if error
+                setTimeout(updateUI, 500);
+            });
+        }
+
+        // Start notifications
         function startNotifications() {
+            // Clear existing interval
             if (notificationInterval) {
                 clearInterval(notificationInterval);
             }
 
-            // Send immediate notification
-            sendNotification();
+            // Send first notification immediately
+            if (Notification.permission === 'granted') {
+                try {
+                    new Notification('I Love You 💕', {
+                        body: 'I love you! 💖',
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
+                        tag: 'iloveyou'
+                    });
+                } catch (e) {
+                    console.error('Notification error:', e);
+                }
+            }
 
-            // Set interval for hourly notifications (3600000 ms = 1 hour)
+            // Set hourly interval (3600000 ms = 1 hour)
             notificationInterval = setInterval(() => {
-                sendNotification();
+                if (Notification.permission === 'granted') {
+                    try {
+                        new Notification('I Love You 💕', {
+                            body: 'I love you! 💖',
+                            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
+                            tag: 'iloveyou'
+                        });
+                    } catch (e) {
+                        console.error('Notification error:', e);
+                    }
+                }
             }, 3600000);
 
-            // Update UI
-            document.getElementById('status').textContent = 'Notifications are ON ✅';
-            document.getElementById('status').className = 'status active';
-            document.getElementById('enableBtn').style.display = 'none';
-            document.getElementById('disableBtn').style.display = 'inline-block';
-
-            // Calculate next notification time
-            updateNextNotificationTime();
-        }
-
-        // Send a notification
-        function sendNotification() {
-            if (Notification.permission === 'granted') {
-                const notification = new Notification('I Love You 💕', {
-                    body: 'I love you! 💖',
-                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💖</text></svg>',
-                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" font-size="50">💕</text></svg>',
-                    tag: 'iloveyou-notification',
-                    requireInteraction: false
-                });
-
-                // Auto close after 5 seconds
-                setTimeout(() => {
-                    notification.close();
-                }, 5000);
-
-                // Update next notification time
-                updateNextNotificationTime();
-            }
-        }
-
-        // Update next notification time display
-        function updateNextNotificationTime() {
-            const now = new Date();
-            const next = new Date(now.getTime() + 3600000);
-            const timeString = next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('nextNotification').textContent = `Next notification at: ${timeString}`;
+            // Update next notification time
+            const next = new Date(Date.now() + 3600000);
+            nextNotificationEl.textContent = `Next notification at: ${next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
         }
 
         // Disable notifications
@@ -366,113 +266,63 @@
                 clearInterval(notificationInterval);
                 notificationInterval = null;
             }
-
-            document.getElementById('status').textContent = 'Notifications are OFF';
-            document.getElementById('status').className = 'status inactive';
-            document.getElementById('enableBtn').style.display = 'inline-block';
-            document.getElementById('disableBtn').style.display = 'none';
-            document.getElementById('nextNotification').textContent = '';
+            nextNotificationEl.textContent = '';
+            updateUI();
         }
 
-        // Check permission on page load
-        window.addEventListener('load', () => {
-            checkPermission();
-            startPermissionMonitoring();
+        // Continuous check for permission changes (every 500ms - aggressive for mobile)
+        function startChecking() {
+            if (checkInterval) return;
+            
+            checkInterval = setInterval(() => {
+                updateUI();
+            }, 500);
+        }
+
+        // Stop checking
+        function stopChecking() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                checkInterval = null;
+            }
+        }
+
+        // Button event listeners - simple and direct
+        enableBtn.addEventListener('click', requestPermission);
+        enableBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            requestPermission();
+        });
+        
+        disableBtn.addEventListener('click', disableNotifications);
+        disableBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            disableNotifications();
         });
 
-        // Also check when DOM is ready (for faster mobile response)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                checkPermission();
-                startPermissionMonitoring();
-            });
-        } else {
-            checkPermission();
-            startPermissionMonitoring();
-        }
+        // Initial setup
+        updateUI();
+        startChecking();
 
-        // Handle page visibility - restart notifications when page becomes visible
+        // Re-check when page becomes visible (user returns from permission dialog)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                // Re-check permission when page becomes visible (mobile fix)
-                setTimeout(() => {
-                    checkPermission();
-                    startPermissionMonitoring();
-                }, 100);
-                if (Notification.permission === 'granted' && !notificationInterval) {
-                    startNotifications();
-                }
-            } else {
-                stopPermissionMonitoring();
+                setTimeout(updateUI, 100);
+                startChecking();
             }
         });
 
-        // Handle page focus - check permission when user returns to page (mobile fix)
+        // Re-check on focus
         window.addEventListener('focus', () => {
-            setTimeout(() => {
-                checkPermission();
-                startPermissionMonitoring();
-            }, 200);
+            setTimeout(updateUI, 100);
+            startChecking();
         });
 
-        // Handle page blur
-        window.addEventListener('blur', () => {
-            stopPermissionMonitoring();
+        // Check on page load
+        window.addEventListener('load', () => {
+            updateUI();
+            startChecking();
         });
-
-        // Setup event listeners for buttons (better mobile support)
-        function setupEventListeners() {
-            const enableBtn = document.getElementById('enableBtn');
-            const disableBtn = document.getElementById('disableBtn');
-
-            if (enableBtn) {
-                enableBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    requestPermission();
-                    return false;
-                });
-                // Also add touch event for better mobile response
-                enableBtn.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    requestPermission();
-                    return false;
-                }, { passive: false });
-                // Touch start as backup
-                enableBtn.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                }, { passive: false });
-            }
-
-            if (disableBtn) {
-                disableBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    disableNotifications();
-                    return false;
-                });
-                disableBtn.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    disableNotifications();
-                    return false;
-                });
-            }
-        }
-
-        // Setup listeners when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setupEventListeners);
-        } else {
-            setupEventListeners();
-        }
-
-        // Service Worker registration for PWA (optional, for better background support)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                // Service worker would need to be in a separate file
-                // For now, we'll rely on the page staying open or being in background
-            });
-        }
     </script>
 </body>
 </html>
