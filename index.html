@@ -162,6 +162,7 @@
         // Simple, reliable approach for mobile
         let notificationInterval = null;
         let checkInterval = null;
+        let manuallyDisabled = false; // Track if user manually disabled
 
         // Get DOM elements
         const statusEl = document.getElementById('status');
@@ -175,15 +176,23 @@
             const permission = Notification.permission;
             
             if (permission === 'granted') {
-                // Permission granted - show active state
-                statusEl.textContent = 'Notifications are ON ✅';
-                statusEl.className = 'status active';
-                enableBtn.style.display = 'none';
-                disableBtn.style.display = 'inline-block';
-                
-                // Start notifications if not already started
-                if (!notificationInterval) {
-                    startNotifications();
+                if (manuallyDisabled) {
+                    // User manually disabled - show disabled state
+                    statusEl.textContent = 'Notifications are OFF (permission granted)';
+                    statusEl.className = 'status inactive';
+                    enableBtn.style.display = 'inline-block';
+                    disableBtn.style.display = 'none';
+                } else {
+                    // Permission granted and not manually disabled - show active state
+                    statusEl.textContent = 'Notifications are ON ✅';
+                    statusEl.className = 'status active';
+                    enableBtn.style.display = 'none';
+                    disableBtn.style.display = 'inline-block';
+                    
+                    // Start notifications if not already started
+                    if (!notificationInterval) {
+                        startNotifications();
+                    }
                 }
             } else if (permission === 'denied') {
                 // Permission denied
@@ -207,6 +216,9 @@
             if (enableBtn.disabled) {
                 return;
             }
+
+            // Reset manual disable flag when enabling
+            manuallyDisabled = false;
 
             if (Notification.permission === 'granted') {
                 updateUI();
@@ -287,12 +299,21 @@
 
         // Disable notifications
         function disableNotifications() {
+            // Set flag to prevent auto-restart
+            manuallyDisabled = true;
+            
+            // Stop notifications
             if (notificationInterval) {
                 clearInterval(notificationInterval);
                 notificationInterval = null;
             }
+            
+            // Update UI
             nextNotificationEl.textContent = '';
-            updateUI();
+            statusEl.textContent = 'Notifications are OFF';
+            statusEl.className = 'status inactive';
+            enableBtn.style.display = 'inline-block';
+            disableBtn.style.display = 'none';
         }
 
         // Continuous check for permission changes (every 500ms - aggressive for mobile)
