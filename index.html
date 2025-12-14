@@ -151,6 +151,10 @@
         </div>
 
         <div id="nextNotification" class="next-notification"></div>
+        
+        <button id="refreshBtn" onclick="location.reload()" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin-top: 10px;">
+            Refresh Page
+        </button>
     </div>
 
     <script>
@@ -164,11 +168,45 @@
 
         // Check current permission status
         function checkPermission() {
-            if (Notification.permission === 'granted') {
+            const permission = Notification.permission;
+            if (permission === 'granted') {
                 startNotifications();
-            } else if (Notification.permission === 'denied') {
+            } else if (permission === 'denied') {
                 document.getElementById('status').textContent = 'Notifications are blocked. Please enable in browser settings.';
                 document.getElementById('status').className = 'status inactive';
+                document.getElementById('enableBtn').style.display = 'inline-block';
+                document.getElementById('disableBtn').style.display = 'none';
+            } else {
+                // Default state
+                document.getElementById('status').textContent = 'Notifications are OFF';
+                document.getElementById('status').className = 'status inactive';
+                document.getElementById('enableBtn').style.display = 'inline-block';
+                document.getElementById('disableBtn').style.display = 'none';
+            }
+        }
+
+        // Continuous permission monitoring for mobile (runs every 2 seconds)
+        let permissionMonitor = null;
+        function startPermissionMonitoring() {
+            if (permissionMonitor) return;
+            
+            permissionMonitor = setInterval(() => {
+                const currentPermission = Notification.permission;
+                if (currentPermission === 'granted') {
+                    // If permission is granted but UI shows it's off, update UI
+                    const statusEl = document.getElementById('status');
+                    if (statusEl && !statusEl.textContent.includes('ON')) {
+                        startNotifications();
+                    }
+                }
+            }, 2000);
+        }
+
+        // Stop monitoring when page is hidden
+        function stopPermissionMonitoring() {
+            if (permissionMonitor) {
+                clearInterval(permissionMonitor);
+                permissionMonitor = null;
             }
         }
 
@@ -182,24 +220,44 @@
             // Update status while requesting
             document.getElementById('status').textContent = 'Requesting permission...';
             document.getElementById('status').className = 'status inactive';
+            document.getElementById('enableBtn').disabled = true;
+
+            // Store permission before request
+            const permissionBefore = Notification.permission;
 
             Notification.requestPermission().then(permission => {
-                // Force UI update on mobile
-                setTimeout(() => {
-                    if (permission === 'granted') {
-                        startNotifications();
-                        // Force a re-check to ensure UI updates
-                        checkPermission();
-                    } else {
-                        document.getElementById('status').textContent = 'Permission denied. Please enable notifications in browser settings.';
-                        document.getElementById('status').className = 'status inactive';
-                    }
-                }, 100);
+                // Multiple attempts to update UI on mobile
+                updateUIAfterPermission(permission);
+                setTimeout(() => updateUIAfterPermission(permission), 300);
+                setTimeout(() => updateUIAfterPermission(permission), 600);
+                setTimeout(() => updateUIAfterPermission(permission), 1000);
             }).catch(err => {
                 console.error('Error requesting permission:', err);
                 document.getElementById('status').textContent = 'Error requesting permission. Please try again.';
                 document.getElementById('status').className = 'status inactive';
+                document.getElementById('enableBtn').disabled = false;
             });
+        }
+
+        // Update UI after permission is granted (mobile fix)
+        function updateUIAfterPermission(permission) {
+            if (permission === 'granted') {
+                startNotifications();
+                checkPermission();
+                // Show refresh button as backup
+                document.getElementById('refreshBtn').style.display = 'inline-block';
+            } else if (permission === 'denied') {
+                document.getElementById('status').textContent = 'Permission denied. Please enable in browser settings and refresh.';
+                document.getElementById('status').className = 'status inactive';
+                document.getElementById('enableBtn').disabled = false;
+                document.getElementById('refreshBtn').style.display = 'inline-block';
+            } else {
+                // Permission is still default - user might have dismissed
+                document.getElementById('status').textContent = 'Please allow notifications when prompted, then refresh page.';
+                document.getElementById('status').className = 'status inactive';
+                document.getElementById('enableBtn').disabled = false;
+                document.getElementById('refreshBtn').style.display = 'inline-block';
+            }
         }
 
         // Start sending notifications
@@ -272,23 +330,33 @@
         // Check permission on page load
         window.addEventListener('load', () => {
             checkPermission();
+            startPermissionMonitoring();
         });
 
         // Also check when DOM is ready (for faster mobile response)
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', checkPermission);
+            document.addEventListener('DOMContentLoaded', () => {
+                checkPermission();
+                startPermissionMonitoring();
+            });
         } else {
             checkPermission();
+            startPermissionMonitoring();
         }
 
         // Handle page visibility - restart notifications when page becomes visible
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 // Re-check permission when page becomes visible (mobile fix)
-                checkPermission();
+                setTimeout(() => {
+                    checkPermission();
+                    startPermissionMonitoring();
+                }, 100);
                 if (Notification.permission === 'granted' && !notificationInterval) {
                     startNotifications();
                 }
+            } else {
+                stopPermissionMonitoring();
             }
         });
 
@@ -296,7 +364,13 @@
         window.addEventListener('focus', () => {
             setTimeout(() => {
                 checkPermission();
+                startPermissionMonitoring();
             }, 200);
+        });
+
+        // Handle page blur
+        window.addEventListener('blur', () => {
+            stopPermissionMonitoring();
         });
 
         // Setup event listeners for buttons (better mobile support)
@@ -307,15 +381,21 @@
             if (enableBtn) {
                 enableBtn.addEventListener('click', function(e) {
                     e.preventDefault();
+                    e.stopPropagation();
                     requestPermission();
                     return false;
                 });
                 // Also add touch event for better mobile response
                 enableBtn.addEventListener('touchend', function(e) {
                     e.preventDefault();
+                    e.stopPropagation();
                     requestPermission();
                     return false;
-                });
+                }, { passive: false });
+                // Touch start as backup
+                enableBtn.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                }, { passive: false });
             }
 
             if (disableBtn) {
